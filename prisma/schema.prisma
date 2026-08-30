@@ -1,0 +1,140 @@
+// Schéma de données — ERP Conciergerie
+// Une base Neon par client (isolation complète), ce même schéma est réutilisé pour chaque déploiement.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN        // gérant / toi
+  MENAGE       // agent de ménage : voit uniquement son planning
+  PROPRIETAIRE // accès lecture seule à ses propres logements
+}
+
+enum StatutReservation {
+  VALIDEE
+  NON_SPECIFIEE
+  ANNULEE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(MENAGE)
+  password  String   // hash bcrypt — géré par NextAuth Credentials provider
+  createdAt DateTime @default(now())
+
+  // Un propriétaire est rattaché à un ou plusieurs logements
+  logements Logement[] @relation("ProprietaireLogements")
+}
+
+model Zone {
+  id        String     @id @default(cuid())
+  nom       String     @unique
+  logements Logement[]
+}
+
+model Logement {
+  id                 String   @id @default(cuid())
+  nom                String   // ex: "App.10" — combiné à la zone pour l'affichage
+  zone               Zone     @relation(fields: [zoneId], references: [id])
+  zoneId             String
+  batiment           String?
+  numero             String?
+  etage              String?
+  boiteACles         Boolean  @default(false)
+  codeCles           String?
+  nombreAppartements Int?
+
+  // Nom du propriétaire en texte libre (tel que dans le sheet d'origine).
+  // Rattacher un vrai compte User (portail propriétaire) viendra plus tard.
+  nomProprietaire    String?
+
+  proprietaire       User?    @relation("ProprietaireLogements", fields: [proprietaireId], references: [id])
+  proprietaireId     String?
+
+  reservations       Reservation[]
+
+  // ---- Fiche bien (module ajouté) ----
+  telephoneProprietaire String?
+  parking               Boolean? 
+  piscine               Boolean?
+  nombreChambres        Int?
+  nombreSallesDeBain    Int?
+  adresse               String?
+  geolocalisation       String?  // "lat,lng" ou lien Google Maps
+  automatisable         Boolean  @default(false) // check-in autonome possible
+  wifiInfo              String?  // "Nom réseau / mot de passe" — pas un secret critique, en clair
+  numConcierge          String?
+  detailsBien           String?  @db.Text
+
+  acces              AccesCompte[]
+
+  @@unique([zoneId, batiment, numero])
+  @@index([zoneId])
+}
+
+enum PlateformeAcces {
+  GMAIL
+  AIRBNB
+  BOOKING
+}
+
+// Identifiants de connexion aux comptes utilisés pour gérer chaque bien.
+// motDePasseChiffre et codeSecondaireChiffre sont chiffrés (AES-256-GCM,
+// voir lib/crypto.ts) — jamais stockés en clair.
+model AccesCompte {
+  id                     String          @id @default(cuid())
+  logement               Logement        @relation(fields: [logementId], references: [id], onDelete: Cascade)
+  logementId             String
+  plateforme             PlateformeAcces
+  identifiant            String?         // email / login — pas chiffré (pas un secret en soi)
+  motDePasseChiffre      String?
+  codeSecondaireChiffre  String?         // 2FA / numéro de vérification / code secret
+
+  updatedAt              DateTime        @updatedAt
+
+  @@unique([logementId, plateforme])
+}
+
+model Reservation {
+  id                 String            @id @default(cuid())
+  logement           Logement          @relation(fields: [logementId], references: [id])
+  logementId         String
+
+  nomVoyageur        String
+  siteReservation    String            // Airbnb / Booking / Direct
+  statut             StatutReservation @default(VALIDEE)
+
+  dateArrivee        DateTime
+  dateDepart         DateTime
+  heureCheckin       String?           // "16:00"
+  heureCheckout      String?           // "11:00"
+  pieceIdentite      Boolean           @default(true)
+  observations       String?
+
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([logementId])
+  @@index([dateArrivee])
+  @@index([dateDepart])
+}
+
+// Suivi des ménages : coché/pas coché, qui l'a fait, quand
+model TacheMenage {
+  id            String   @id @default(cuid())
+  logementId    String
+  date          DateTime // jour du ménage (= date de départ du checkout concerné)
+  fait          Boolean  @default(false)
+  faitParUserId String?
+  faitLe        DateTime?
+
+  @@unique([logementId, date])
+}
