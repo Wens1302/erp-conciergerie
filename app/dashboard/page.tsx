@@ -21,6 +21,7 @@ type DayData = {
   ins: { id: string; nomVoyageur: string; logementNom: string; heureCheckin: string | null }[];
   tasks: {
     logementId: string;
+    date: string;
     logementNom: string;
     proprietaire: string | null;
     checkoutTime: string | null;
@@ -28,6 +29,7 @@ type DayData = {
     keyBox: boolean;
     code: string | null;
     urgent: boolean;
+    overdue: boolean;
     fait: boolean;
   }[];
 };
@@ -65,13 +67,18 @@ export default function DashboardPage() {
     setCurrentISO(fmtISO(d));
   }
 
-  async function toggleTask(logementId: string) {
+  async function toggleTask(logementId: string, date: string) {
     await fetch('/api/cleaning-tasks/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logementId, date: currentISO }),
+      body: JSON.stringify({ logementId, date }),
     });
     loadDay(currentISO);
+  }
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
   }
 
   const d = fromISO(currentISO);
@@ -86,6 +93,7 @@ export default function DashboardPage() {
         <a href="/dashboard" className="active">Tableau de bord</a>
         <a href="/reservations">Réservations</a>
         <a href="/logements">Biens &amp; accès</a>
+        <button type="button" onClick={logout}>Deconnexion</button>
       </nav>
 
       <div className="datenav">
@@ -131,14 +139,14 @@ export default function DashboardPage() {
                 <div className="empty-state">Aucun ménage prévu ce jour-là.</div>
               ) : (
                 data.tasks.map((t) => (
-                  <div key={t.logementId} className={`task ${t.urgent ? 'urgent' : ''} ${t.fait ? 'done' : ''}`}>
-                    <div className={`task-check ${t.fait ? 'checked' : ''}`} onClick={() => toggleTask(t.logementId)}>
+                  <div key={`${t.logementId}-${t.date}`} className={`task ${t.urgent ? 'urgent' : ''} ${t.fait ? 'done' : ''}`}>
+                    <div className={`task-check ${t.fait ? 'checked' : ''}`} onClick={() => toggleTask(t.logementId, t.date)}>
                       {t.fait && '✓'}
                     </div>
                     <div className="task-body">
                       <div className="task-top">
                         <span className="logement">{t.logementNom}</span>
-                        <span className={`badge ${t.urgent ? 'urgent' : 'normal'}`}>
+                        <span className={`badge ${t.urgent ? 'urgent' : t.overdue ? 'late' : 'normal'}`}>
                           {t.urgent ? 'Urgent · Recouche' : 'Standard'}
                         </span>
                       </div>
@@ -147,6 +155,11 @@ export default function DashboardPage() {
                         {t.checkoutTime && <span>🕐 Départ {t.checkoutTime}</span>}
                         {t.keyBox && <span>🔑 Boîte{t.code ? ` · ${t.code}` : ''}</span>}
                       </div>
+                      {t.overdue && (
+                        <div className="task-note">
+                          Report du {fromISO(t.date).toLocaleDateString('fr-FR')}
+                        </div>
+                      )}
                       {t.urgent && (
                         <div className="task-note">
                           Nouvelle arrivée le jour même{t.nextCheckinTime ? ` à ${t.nextCheckinTime}` : ''} — à traiter en priorité

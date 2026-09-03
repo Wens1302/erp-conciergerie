@@ -27,8 +27,8 @@ function validateEmail(email: string) {
 }
 
 function validatePassword(password: string) {
-  if (password.length < 12) {
-    throw new Error('ADMIN_PASSWORD doit contenir au moins 12 caracteres.');
+  if (password.length < 8) {
+    throw new Error('ADMIN_PASSWORD doit contenir au moins 8 caracteres.');
   }
 }
 

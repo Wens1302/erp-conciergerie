@@ -23,6 +23,7 @@ export type ReservationLite = {
 
 export type CleaningTask = {
   logementId: string;
+  date: string;
   logementNom: string;
   proprietaire: string | null;
   checkoutTime: string | null;
@@ -30,6 +31,7 @@ export type CleaningTask = {
   keyBox: boolean;
   code: string | null;
   urgent: boolean;
+  overdue: boolean;
 };
 
 function sameYMD(a: Date, b: Date) {
@@ -55,6 +57,7 @@ export function buildCleaningTasks(outs: ReservationLite[], ins: ReservationLite
     const urgent = Boolean(matchingIn);
     return {
       logementId: r.logement.id,
+      date: r.dateDepart.toISOString().slice(0, 10),
       logementNom: r.logement.nom,
       proprietaire: r.logement.nomProprietaire,
       checkoutTime: r.heureCheckout,
@@ -62,6 +65,7 @@ export function buildCleaningTasks(outs: ReservationLite[], ins: ReservationLite
       keyBox: r.logement.boiteACles,
       code: r.logement.codeCles,
       urgent,
+      overdue: false,
     };
   });
 

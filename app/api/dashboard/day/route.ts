@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   // On charge une fenêtre large autour du jour (pour couvrir les fuseaux horaires
   // proprement) puis on filtre précisément côté logique métier.
   const windowStart = new Date(day);
-  windowStart.setUTCDate(windowStart.getUTCDate() - 1);
+  windowStart.setUTCDate(windowStart.getUTCDate() - 30);
   const windowEnd = new Date(day);
   windowEnd.setUTCDate(windowEnd.getUTCDate() + 2);
 
@@ -38,13 +38,27 @@ export async function GET(req: NextRequest) {
 
   const { outs, ins } = splitDay(normalized as any, day);
   const tasks = buildCleaningTasks(outs as any, ins as any);
+  const previousOuts = normalized.filter((r) => {
+    const dateDepart = new Date(r.dateDepart);
+    return dateDepart < day && r.statut !== 'ANNULEE';
+  });
+  const previousTasks = buildCleaningTasks(previousOuts as any, []).map((t) => ({
+    ...t,
+    urgent: false,
+    overdue: true,
+  }));
 
   // Merge avec l'état "fait" stocké en base
   const doneRows = await prisma.tacheMenage.findMany({
-    where: { date: day, fait: true },
+    where: {
+      fait: true,
+      date: { gte: windowStart, lte: day },
+    },
   });
-  const doneSet = new Set(doneRows.map((d) => d.logementId));
-  const tasksWithDone = tasks.map((t) => ({ ...t, fait: doneSet.has(t.logementId) }));
+  const doneSet = new Set(doneRows.map((d) => `${d.logementId}:${d.date.toISOString().slice(0, 10)}`));
+  const tasksWithDone = [...previousTasks, ...tasks]
+    .filter((t) => !doneSet.has(`${t.logementId}:${t.date}`))
+    .map((t) => ({ ...t, fait: false }));
 
   return NextResponse.json({
     date: dateParam,
