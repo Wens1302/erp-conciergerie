@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         fait: Boolean(row?.fait),
         faitLe: row?.faitLe?.toISOString() || null,
         assigneeUserId: row?.assigneeUserId || null,
-        assigneeName: row?.assignee?.name || row?.assignee?.email || null,
+        assigneeName: row?.assigneeName || row?.assignee?.name || row?.assignee?.email || null,
       };
     });
 

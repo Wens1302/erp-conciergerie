@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       fait: Boolean(row?.fait),
       faitLe: row?.faitLe?.toISOString() || null,
       assigneeUserId: row?.assigneeUserId || null,
-      assigneeName: row?.assignee?.name || row?.assignee?.email || null,
+      assigneeName: row?.assigneeName || row?.assignee?.name || row?.assignee?.email || null,
       faitParName: row?.faitPar?.name || row?.faitPar?.email || null,
     };
   });
@@ -76,16 +76,24 @@ export async function GET(req: NextRequest) {
   });
 
   const staffById = new Map(staff.map((user) => [user.id, user]));
+  const freeAssigneeNames = Array.from(
+    new Set(items.filter((item) => !item.assigneeUserId && item.assigneeName).map((item) => item.assigneeName))
+  );
   const groups = [
     ...staff.map((user) => ({
       assigneeUserId: user.id,
       assigneeName: user.name || user.email,
       tasks: items.filter((item) => item.assigneeUserId === user.id),
     })),
+    ...freeAssigneeNames.map((name) => ({
+      assigneeUserId: null,
+      assigneeName: name || 'Non assigne',
+      tasks: items.filter((item) => !item.assigneeUserId && item.assigneeName === name),
+    })),
     {
       assigneeUserId: null,
       assigneeName: 'Non assigne',
-      tasks: items.filter((item) => !item.assigneeUserId || !staffById.has(item.assigneeUserId)),
+      tasks: items.filter((item) => (!item.assigneeUserId || !staffById.has(item.assigneeUserId)) && !item.assigneeName),
     },
   ].map((group) => ({
     ...group,

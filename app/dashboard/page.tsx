@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DayData | null>(null);
   const [strip, setStrip] = useState<StripDay[]>([]);
   const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [assigneeDrafts, setAssigneeDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const loadDay = useCallback(async (iso: string) => {
@@ -52,6 +53,11 @@ export default function DashboardPage() {
     const res = await fetch(`/api/dashboard/day?date=${iso}`);
     const json = await res.json();
     setData(json);
+    setAssigneeDrafts(
+      Object.fromEntries(
+        (json.tasks || []).map((task: DayData['tasks'][number]) => [`${task.logementId}-${task.date}`, task.assigneeName || ''])
+      )
+    );
     setLoading(false);
   }, []);
 
@@ -88,11 +94,11 @@ export default function DashboardPage() {
     loadDay(currentISO);
   }
 
-  async function assignTask(logementId: string, date: string, assigneeUserId: string) {
+  async function assignTaskName(logementId: string, date: string, assigneeName: string) {
     await fetch('/api/cleaning-tasks/assign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logementId, date, assigneeUserId: assigneeUserId || null }),
+      body: JSON.stringify({ logementId, date, assigneeName }),
     });
     loadDay(currentISO);
   }
@@ -117,6 +123,11 @@ export default function DashboardPage() {
         <a href="/logements">Biens &amp; accès</a>
         <button type="button" onClick={logout}>Deconnexion</button>
       </nav>
+      <datalist id="cleaning-staff-suggestions">
+        {staff.map((user) => (
+          <option key={user.id} value={user.name || user.email} />
+        ))}
+      </datalist>
 
       <div className="datenav">
         <button className="navbtn" onClick={() => shiftDay(-1)} aria-label="Jour précédent">‹</button>
@@ -173,17 +184,18 @@ export default function DashboardPage() {
                       <div className="task-top">
                         <span className="logement">{t.logementNom}</span>
                         <div className="task-actions">
-                          <select
+                          <input
                             className="assignee-select"
-                            value={t.assigneeUserId || ''}
-                            onChange={(e) => assignTask(t.logementId, t.date, e.target.value)}
-                            aria-label="Assigner une dame de menage"
-                          >
-                            <option value="">Non assigne</option>
-                            {staff.map((user) => (
-                              <option key={user.id} value={user.id}>{user.name || user.email}</option>
-                            ))}
-                          </select>
+                            list="cleaning-staff-suggestions"
+                            value={assigneeDrafts[`${t.logementId}-${t.date}`] ?? t.assigneeName ?? ''}
+                            placeholder="Nom dame de menage"
+                            onChange={(e) => setAssigneeDrafts((drafts) => ({ ...drafts, [`${t.logementId}-${t.date}`]: e.target.value }))}
+                            onBlur={(e) => assignTaskName(t.logementId, t.date, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur();
+                            }}
+                            aria-label="Nom de la dame de menage"
+                          />
                           <span className={`badge ${t.fait ? 'valid' : t.urgent ? 'urgent' : t.overdue ? 'late' : 'normal'}`}>
                             {t.fait ? 'Fait' : t.urgent ? 'Urgent · Recouche' : 'Standard'}
                           </span>

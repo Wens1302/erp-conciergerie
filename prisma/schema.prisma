@@ -138,6 +138,7 @@ model TacheMenage {
   date          DateTime // jour du ménage (= date de départ du checkout concerné)
   assigneeUserId String?
   assignee      User?    @relation("MenagesAssignes", fields: [assigneeUserId], references: [id])
+  assigneeName  String?
   fait          Boolean  @default(false)
   faitParUserId String?
   faitPar       User?    @relation("MenagesRealises", fields: [faitParUserId], references: [id])
