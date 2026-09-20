@@ -48,17 +48,30 @@ export async function GET(req: NextRequest) {
     overdue: true,
   }));
 
-  // Merge avec l'état "fait" stocké en base
-  const doneRows = await prisma.tacheMenage.findMany({
+  // Merge avec l'etat stocke en base. Les menages du jour restent visibles
+  // meme une fois coches afin de pouvoir annuler une validation faite par erreur.
+  const taskRows = await prisma.tacheMenage.findMany({
     where: {
-      fait: true,
       date: { gte: windowStart, lte: day },
     },
+    include: { assignee: { select: { id: true, name: true, email: true } } },
   });
-  const doneSet = new Set(doneRows.map((d) => `${d.logementId}:${d.date.toISOString().slice(0, 10)}`));
+  const rowByKey = new Map(taskRows.map((d) => [`${d.logementId}:${d.date.toISOString().slice(0, 10)}`, d]));
   const tasksWithDone = [...previousTasks, ...tasks]
-    .filter((t) => !doneSet.has(`${t.logementId}:${t.date}`))
-    .map((t) => ({ ...t, fait: false }));
+    .filter((t) => {
+      const row = rowByKey.get(`${t.logementId}:${t.date}`);
+      return !t.overdue || !row?.fait;
+    })
+    .map((t) => {
+      const row = rowByKey.get(`${t.logementId}:${t.date}`);
+      return {
+        ...t,
+        fait: Boolean(row?.fait),
+        faitLe: row?.faitLe?.toISOString() || null,
+        assigneeUserId: row?.assigneeUserId || null,
+        assigneeName: row?.assignee?.name || row?.assignee?.email || null,
+      };
+    });
 
   return NextResponse.json({
     date: dateParam,

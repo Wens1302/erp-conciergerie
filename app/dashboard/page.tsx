@@ -31,15 +31,20 @@ type DayData = {
     urgent: boolean;
     overdue: boolean;
     fait: boolean;
+    faitLe: string | null;
+    assigneeUserId: string | null;
+    assigneeName: string | null;
   }[];
 };
 
 type StripDay = { date: string; outs: number; ins: number; urgent: number };
+type StaffUser = { id: string; name: string | null; email: string };
 
 export default function DashboardPage() {
   const [currentISO, setCurrentISO] = useState(todayISO());
   const [data, setData] = useState<DayData | null>(null);
   const [strip, setStrip] = useState<StripDay[]>([]);
+  const [staff, setStaff] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadDay = useCallback(async (iso: string) => {
@@ -61,6 +66,13 @@ export default function DashboardPage() {
     loadStrip(currentISO);
   }, [currentISO, loadDay, loadStrip]);
 
+  useEffect(() => {
+    fetch('/api/cleaning-staff')
+      .then((res) => res.json())
+      .then(setStaff)
+      .catch(() => setStaff([]));
+  }, []);
+
   function shiftDay(delta: number) {
     const d = fromISO(currentISO);
     d.setUTCDate(d.getUTCDate() + delta);
@@ -72,6 +84,15 @@ export default function DashboardPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ logementId, date }),
+    });
+    loadDay(currentISO);
+  }
+
+  async function assignTask(logementId: string, date: string, assigneeUserId: string) {
+    await fetch('/api/cleaning-tasks/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logementId, date, assigneeUserId: assigneeUserId || null }),
     });
     loadDay(currentISO);
   }
@@ -91,6 +112,7 @@ export default function DashboardPage() {
 
       <nav className="top-nav">
         <a href="/dashboard" className="active">Tableau de bord</a>
+        <a href="/menages">Board menages</a>
         <a href="/reservations">Réservations</a>
         <a href="/logements">Biens &amp; accès</a>
         <button type="button" onClick={logout}>Deconnexion</button>
@@ -140,21 +162,44 @@ export default function DashboardPage() {
               ) : (
                 data.tasks.map((t) => (
                   <div key={`${t.logementId}-${t.date}`} className={`task ${t.urgent ? 'urgent' : ''} ${t.fait ? 'done' : ''}`}>
-                    <div className={`task-check ${t.fait ? 'checked' : ''}`} onClick={() => toggleTask(t.logementId, t.date)}>
+                    <div
+                      className={`task-check ${t.fait ? 'checked' : ''}`}
+                      onClick={() => toggleTask(t.logementId, t.date)}
+                      title={t.fait ? 'Annuler la validation' : 'Marquer comme fait'}
+                    >
                       {t.fait && '✓'}
                     </div>
                     <div className="task-body">
                       <div className="task-top">
                         <span className="logement">{t.logementNom}</span>
-                        <span className={`badge ${t.urgent ? 'urgent' : t.overdue ? 'late' : 'normal'}`}>
-                          {t.urgent ? 'Urgent · Recouche' : 'Standard'}
-                        </span>
+                        <div className="task-actions">
+                          <select
+                            className="assignee-select"
+                            value={t.assigneeUserId || ''}
+                            onChange={(e) => assignTask(t.logementId, t.date, e.target.value)}
+                            aria-label="Assigner une dame de menage"
+                          >
+                            <option value="">Non assigne</option>
+                            {staff.map((user) => (
+                              <option key={user.id} value={user.id}>{user.name || user.email}</option>
+                            ))}
+                          </select>
+                          <span className={`badge ${t.fait ? 'valid' : t.urgent ? 'urgent' : t.overdue ? 'late' : 'normal'}`}>
+                            {t.fait ? 'Fait' : t.urgent ? 'Urgent · Recouche' : 'Standard'}
+                          </span>
+                        </div>
                       </div>
                       <div className="task-meta">
                         <span>👤 {t.proprietaire || '—'}</span>
+                        <span>Assigne a {t.assigneeName || 'personne'}</span>
                         {t.checkoutTime && <span>🕐 Départ {t.checkoutTime}</span>}
                         {t.keyBox && <span>🔑 Boîte{t.code ? ` · ${t.code}` : ''}</span>}
                       </div>
+                      {t.fait && (
+                        <button className="undo-done" type="button" onClick={() => toggleTask(t.logementId, t.date)}>
+                          Annuler la validation
+                        </button>
+                      )}
                       {t.overdue && (
                         <div className="task-note">
                           Report du {fromISO(t.date).toLocaleDateString('fr-FR')}

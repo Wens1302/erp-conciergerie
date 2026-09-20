@@ -32,6 +32,8 @@ model User {
 
   // Un propriétaire est rattaché à un ou plusieurs logements
   logements Logement[] @relation("ProprietaireLogements")
+  menagesAssignes TacheMenage[] @relation("MenagesAssignes")
+  menagesRealises TacheMenage[] @relation("MenagesRealises")
 }
 
 model Zone {
@@ -60,6 +62,7 @@ model Logement {
   proprietaireId     String?
 
   reservations       Reservation[]
+  tachesMenage       TacheMenage[]
 
   // ---- Fiche bien (module ajouté) ----
   telephoneProprietaire String?
@@ -131,10 +134,16 @@ model Reservation {
 model TacheMenage {
   id            String   @id @default(cuid())
   logementId    String
+  logement      Logement @relation(fields: [logementId], references: [id], onDelete: Cascade)
   date          DateTime // jour du ménage (= date de départ du checkout concerné)
+  assigneeUserId String?
+  assignee      User?    @relation("MenagesAssignes", fields: [assigneeUserId], references: [id])
   fait          Boolean  @default(false)
   faitParUserId String?
+  faitPar       User?    @relation("MenagesRealises", fields: [faitParUserId], references: [id])
   faitLe        DateTime?
 
   @@unique([logementId, date])
+  @@index([assigneeUserId])
+  @@index([date])
 }
